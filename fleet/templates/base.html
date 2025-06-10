@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="black">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Список заказов</title>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css"/>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css"/>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        body,
+        .container {
+          transition: background-color 0.3s ease, color 0.3s ease;
+          will-change: background-color, color;
+        }
+        h1, button {
+          transition: color 0.3s ease;
+          will-change: color;
+        }
+        th.clickable {
+          cursor: pointer;
+          user-select: none;
+          white-space: nowrap;
+        }
+        /* Для стрелок и буквы */
+        .sort-indicator {
+          margin-left: 6px;
+          font-weight: bold;
+          user-select: none;
+        }
+        .asc::after {
+          content: "▲";
+          margin-left: 4px;
+          font-size: 0.7em;
+        }
+        .desc::after {
+          content: "▼";
+          margin-left: 4px;
+          font-size: 0.7em;
+        }
+    </style>
+</head>
+<body class="bg-base-200 p-10">
+
+<div class="container mx-auto max-w-5xl">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-4xl font-extrabold text-primary">Список заказов</h1>
+
+        <div class="flex items-center space-x-3">
+            <button id="theme-toggle"
+                    class="btn btn-primary btn-sm shadow-lg hover:btn-secondary transition duration-300">
+                Переключить тему
+            </button>
+
+            <a href="/admin/"
+               class="btn btn-outline btn-sm flex items-center gap-2 shadow-lg hover:btn-secondary transition duration-300"
+               title="Вход в админку">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                     stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M5.121 17.804A7 7 0 0112 15a7 7 0 016.879 2.804M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+                Вход в админку
+            </a>
+        </div>
+    </div>
+
+    <div class="overflow-x-auto shadow-lg rounded-lg">
+        <table class="table w-full table-zebra" id="orders-table">
+            <thead class="bg-primary text-primary-content">
+            <tr>
+                <th class="clickable" id="order-number-header">Номер заказа<span class="sort-indicator"
+                                                                                 id="order-number-indicator"></span>
+                </th>
+                <th class="clickable" id="client-header">Клиент<span class="sort-indicator"
+                                                                     id="client-indicator"></span></th>
+                <th>Дата доставки</th>
+                <th>Дата оплаты</th>
+                <th>Сумма</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for order in orders %}
+            <tr class="hover:bg-primary/10 transition-colors duration-200 cursor-pointer">
+                <td>{{ order.number_order }}</td>
+                <td class="client-name">{{ order.client.full_name }}</td>
+                <td>{{ order.delivery_date }}</td>
+                <td>{% if order.payment_date %}{{ order.payment_date }}{% else %}—{% endif %}</td>
+                <td>{% if order.amount %}{{ order.amount }} ₽{% else %}—{% endif %}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5" class="text-center py-4">Заказы не найдены</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const btn = document.getElementById('theme-toggle');
+const themes = ['white', 'black']; // список тем
+let currentThemeIndex = themes.indexOf(document.documentElement.getAttribute('data-theme') || 'cupcake');
+
+btn.addEventListener('click', () => {
+    currentThemeIndex = (currentThemeIndex + 1) % themes.length;
+    document.documentElement.setAttribute('data-theme', themes[currentThemeIndex]);
+});
+
+    // Текущие состояния сортировки: 'none', 'asc', 'desc'
+    let orderNumberSortState = 'none';
+    let clientSortState = 'none';
+
+    // Ссылки на индикаторы
+    const orderNumberIndicator = document.getElementById('order-number-indicator');
+    const clientIndicator = document.getElementById('client-indicator');
+
+    // Функция сброса всех индикаторов
+    function resetIndicators() {
+        orderNumberIndicator.textContent = '';
+        orderNumberIndicator.className = 'sort-indicator';
+        clientIndicator.textContent = '';
+        clientIndicator.className = 'sort-indicator';
+    }
+
+    // Функция обновления индикатора
+    // letter — 'А' или 'а', state — 'asc' или 'desc'
+    function setIndicator(indicator, letter, state) {
+        indicator.textContent = letter;
+        indicator.className = 'sort-indicator ' + (state === 'asc' ? 'asc' : 'desc');
+    }
+
+    // Функция извлечения числа из текста (например, "заказ 123" -> 123)
+    function extractNumber(text) {
+        const match = text.match(/\d+/);
+        return match ? parseInt(match[0], 10) : 0;
+    }
+
+    // Функция сортировки строк таблицы
+    function sortTable(compareFn) {
+        const tbody = document.querySelector('#orders-table tbody');
+        const rowsArray = Array.from(tbody.querySelectorAll('tr'));
+        rowsArray.sort(compareFn);
+        tbody.innerHTML = '';
+        rowsArray.forEach(row => tbody.appendChild(row));
+    }
+
+    // Обработчик клика по "Номер заказа"
+    document.getElementById('order-number-header').addEventListener('click', () => {
+        // Переключаем состояние: none → asc → desc → none
+        if (orderNumberSortState === 'none') {
+            orderNumberSortState = 'asc';
+        } else if (orderNumberSortState === 'asc') {
+            orderNumberSortState = 'desc';
+        } else {
+            orderNumberSortState = 'none';
+        }
+
+        // Сбрасываем сортировку клиента
+        clientSortState = 'none';
+
+        if (orderNumberSortState === 'none') {
+            // Сброс сортировки — вернуть оригинальный порядок (например, можно перезагрузить страницу или не сортировать)
+            // Для примера просто не сортируем (оставляем как есть)
+            resetIndicators();
+        } else {
+            sortTable((a, b) => {
+                const textA = a.children[0].textContent.toLowerCase();
+                const textB = b.children[0].textContent.toLowerCase();
+
+                const numA = extractNumber(textA);
+                const numB = extractNumber(textB);
+
+                if (numA < numB) return orderNumberSortState === 'asc' ? -1 : 1;
+                if (numA > numB) return orderNumberSortState === 'asc' ? 1 : -1;
+                return 0;
+            });
+            // Показываем индикатор: буква А + стрелка
+            setIndicator(orderNumberIndicator, '1', orderNumberSortState);
+        }
+        // Обнуляем индикатор клиента
+        clientIndicator.textContent = '';
+        clientIndicator.className = 'sort-indicator';
+    });
+
+    // Обработчик клика по "Клиент"
+    document.getElementById('client-header').addEventListener('click', () => {
+        // Переключаем состояние: none → asc → desc → none
+        if (clientSortState === 'none') {
+            clientSortState = 'asc';
+        } else if (clientSortState === 'asc') {
+            clientSortState = 'desc';
+        } else {
+            clientSortState = 'none';
+        }
+
+        // Сбрасываем сортировку номера заказа
+        orderNumberSortState = 'none';
+
+        if (clientSortState === 'none') {
+            resetIndicators();
+            // Без сортировки — оставляем как есть
+        } else {
+            sortTable((a, b) => {
+                const nameA = a.querySelector('.client-name').textContent.toLowerCase();
+                const nameB = b.querySelector('.client-name').textContent.toLowerCase();
+
+                if (nameA < nameB) return clientSortState === 'asc' ? -1 : 1;
+                if (nameA > nameB) return clientSortState === 'asc' ? 1 : -1;
+                return 0;
+            });
+            // Показываем индикатор: буква а + стрелка
+            setIndicator(clientIndicator, 'а', clientSortState);
+        }
+        // Обнуляем индикатор номера заказа
+        orderNumberIndicator.textContent = '';
+        orderNumberIndicator.className = 'sort-indicator';
+    });
+
+</script>
+
+</body>
+</html>
